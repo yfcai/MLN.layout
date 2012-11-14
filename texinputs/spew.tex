@@ -1,7 +1,16 @@
 % we want all boxes shown
 \scrollmode
+\tracingoutput=1
 \showboxdepth=99999
 \showboxbreadth=99999
+
+% 0-dimensional boxes for information
+\def\spewhbox#1{%
+{\setbox0=\hbox to 0pt{#1}\dp0=0pt \ht0=0pt \box0\relax}}
+\def\spewvbox#1{%
+{\setbox0=\vbox to 0pt{#1}\dp0=0pt \ht0=0pt \box0\relax}}
+\def\spewidhbox#1{\spewhbox{{\tt\fontsize{5}{10}\selectfont[\thespewid]#1}}}
+\def\spewidvbox#1{\spewvbox{{\tt\fontsize{5}{10}\selectfont[\thespewid]#1}}}
 
 % let TeX do the hyphenation
 \pretolerance=-1
@@ -13,34 +22,102 @@
 \hfuzz=\maxdimen % do not report overfull hboxes
 \vfuzz=\maxdimen % do not report overfull vboxes
 
-% eject anything and everything in the vertical list
-% every time something is added to it
-\vsize=-0.5\maxdimen
-\output={{%
-\setbox0=\box255 % empty \box255 into \box0
-\showbox0        % write the content to log
-}}
-
 % add a distinguished 0-dimensional box just after the blank box added
 % due to nonzero \parindent and put the paragraph index inside
 %
-%\showthe\everypar
-\newcounter{parnum}
-\setcounter{parnum}0
-%
-\def\zbox#1{%
-{\setbox0=\hbox to 0pt{#1}\dp0=0pt \ht0=0pt \box0\relax}}
-%
-\everypar=\expandafter{\the\everypar
-\stepcounter{parnum}%
-\zbox{{\tt\fontsize{5}{10}\selectfont[\theparnum]}}}
+% increment spewid at beginning of paragraph
+\newcounter{spewid}
+\setcounter{spewid}{0}
+\newtoks\speweverypar
+\speweverypar=\everypar
+\everypar={%
+\stepcounter{spewid}%
+% dump paragraph parameters here and hope they don't change
+\message{^^J%
+[\thespewid] Paragraph^^J%
+\hsize		\the\hsize^^J%
+^^J}%
+\the\speweverypar
+\spewidhbox P
+% alas, going too close to \maxdimen freaks TeX out
+% \maxdimen = 16383.99998pt
+\hskip-8192pt plus 1filll
+}
 
-% dump line-breaking parameters at the end of every paragraph
-% it is not invoked together with \output so we need the ID
-% to relate paragraphs and their parameters
+% put every paragraph in a single \hbox
+% probably want to call \shipout
 \def\par{%
-\message{%
-Parameters for paragraph \theparnum:^^J%
-TODO = fix me!^^J%
-}%
-\endgraf}
+\endgraf                % create the paragraph box
+\vskip0pt plus 1filll minus 1filll
+\break			% ship it out
+}
+
+% handle insertions
+% we want the insertions as soon as possible
+\floatingpenalty=20000
+% insertions are given global spew-IDs
+%
+% while the parameters related to insertion
+% are evaluated when the end of the group
+% is reached, we spew them here and hope
+% that their values don't get changed
+\let\spewinsert=\insert
+% we redefine \insert this way hoping that the insertion class #1
+% will always be given in a macro, as in
+%
+%   \insert \footins { ... }
+\def\insert#1#2{%
+\stepcounter{spewid}
+\message{^^J%
+[\thespewid] Insertion^^J%
+class-name	#1^^J%
+class-value     \the#1^^J%
+dimen		\the\dimen#1^^J%
+skip		\the\skip#1^^J%
+count		\the\count#1^^J%
+^^J}%
+% place an infobox in main text before the mumbo jumbo of insertion
+\spewidhbox I
+% insert stuff and force them to materialise with the page where they
+% are defined
+%
+% TODO:
+% This is troublesome.
+% #2 is already packed when you have it here.
+% you probably want to open it
+% and add your label inside.
+%
+% TODO:
+% footnotes doesn't use your \everypar.
+% footnotes doesn't use your \par.
+% find some way to sneak them in.
+\spewinsert#1{#2}%
+}
+
+% print all nonempty insertion boxes
+% we don't need them right now
+\makeatletter
+\newcount\spewinscount
+\def\spewinsertions{%
+\spewinscount=\insc@unt	% assume min insertion stored in \insc@unt
+\spewinsloop
+}
+\makeatother
+\def\spewinsloop{%
+\ifnum\spewinscount<255	% assume highest insertion class is 254
+\ifvoid\spewinscount
+\else\showbox\spewinscount
+\fi
+\advance\spewinscount by 1
+\spewinsloop
+\fi
+}
+
+% output routines
+\newtoks\spewoutput
+\spewoutput=\output
+\output={%
+%\showbox255       	% write the content to log
+%\spewinsertions		% log insertion boxes
+\the\spewoutput 	% create an ugly document
+}
