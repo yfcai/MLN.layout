@@ -1,0 +1,47 @@
+% we want all boxes shown
+\scrollmode
+\tracingoutput=1
+\showboxdepth=99999
+\showboxbreadth=99999
+
+% let TeX do the hyphenation
+\pretolerance=-1
+
+% don't do any typesetting
+\tolerance=10000 % infinitely tolerant
+\hbadness=10000  % do not report underfull hboxes
+\vbadness=10000  % do not report underfull vboxes
+\hfuzz=\maxdimen % do not report overfull hboxes
+\vfuzz=\maxdimen % do not report overfull vboxes
+
+% eject anything and everything in the vertical list
+% every time something is added to it
+\vsize=-0.5\maxdimen
+\output={{%
+\setbox0=\box255 % empty \box255 into \box0
+\showbox0        % write the content to log
+}}
+
+% add a distinguished 0-dimensional box just after the blank box added
+% due to nonzero \parindent and put the paragraph index inside
+%
+%\showthe\everypar
+\newcounter{parnum}
+\setcounter{parnum}0
+%
+\def\zbox#1{%
+{\setbox0=\hbox to 0pt{#1}\dp0=0pt \ht0=0pt \box0\relax}}
+%
+\everypar=\expandafter{\the\everypar
+\stepcounter{parnum}%
+\zbox{{\tt\fontsize{5}{10}\selectfont[\theparnum]}}}
+
+% dump line-breaking parameters at the end of every paragraph
+% it is not invoked together with \output so we need the ID
+% to relate paragraphs and their parameters
+\def\par{%
+\message{%
+Parameters for paragraph \theparnum:^^J%
+TODO = fix me!^^J%
+}%
+\endgraf}
