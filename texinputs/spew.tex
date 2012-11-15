@@ -1,3 +1,6 @@
+\newcounter{spewid}
+\setcounter{spewid}{0}
+
 % we want all boxes shown
 \scrollmode
 \tracingoutput=1
@@ -22,33 +25,32 @@
 \hfuzz=\maxdimen % do not report overfull hboxes
 \vfuzz=\maxdimen % do not report overfull vboxes
 
-% add a distinguished 0-dimensional box just after the blank box added
-% due to nonzero \parindent and put the paragraph index inside
-%
-% increment spewid at beginning of paragraph
-\newcounter{spewid}
-\setcounter{spewid}{0}
 \newtoks\speweverypar
 \speweverypar=\everypar
 \everypar={%
 \stepcounter{spewid}%
-% dump paragraph parameters here and hope they don't change
-\message{^^J%
-[\thespewid] Paragraph^^J%
-\hsize		\the\hsize^^J%
-^^J}%
 \the\speweverypar
 \spewidhbox P
 % alas, going too close to \maxdimen freaks TeX out
 % \maxdimen = 16383.99998pt
-\hskip-8192pt plus 1filll
 }
 
 % put every paragraph in a single \hbox
 % probably want to call \shipout
+\widowpenalty=0
+\clubpenalty=0
 \def\par{%
+\spewhbox
+{{%
+% dump paragraph parameters
+\message{^^J%
+[\thespewid] Paragraph^^J%
+\hsize		\the\hsize^^J%
+^^J}%
+\stepcounter{spewid}%
+\tt\fontsize{5}{5}\selectfont[\thespewid]P
+}}%
 \endgraf                % create the paragraph box
-\vskip0pt plus 1filll minus 1filll
 \break			% ship it out
 }
 
@@ -91,26 +93,11 @@ count		\the\count#1^^J%
 % footnotes doesn't use your \everypar.
 % footnotes doesn't use your \par.
 % find some way to sneak them in.
+%{%
+%\toks0={#2}
+%\showthe\toks0
+%}%
 \spewinsert#1{#2}%
-}
-
-% print all nonempty insertion boxes
-% we don't need them right now
-\makeatletter
-\newcount\spewinscount
-\def\spewinsertions{%
-\spewinscount=\insc@unt	% assume min insertion stored in \insc@unt
-\spewinsloop
-}
-\makeatother
-\def\spewinsloop{%
-\ifnum\spewinscount<255	% assume highest insertion class is 254
-\ifvoid\spewinscount
-\else\showbox\spewinscount
-\fi
-\advance\spewinscount by 1
-\spewinsloop
-\fi
 }
 
 % output routines
