@@ -1,5 +1,6 @@
+\input spewhead
+\vbox{
 \input spew
-
 
 \begin{tabular}{lcr}
 Hi&my&name\\
@@ -14,5 +15,8 @@ limited:
 Assignment and unpacking. However, these are sufficient to
 implement other operations such as appending.
 
+\newpage
+
 \subsection{So long and thanks for the fish}
 
+}

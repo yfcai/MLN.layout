@@ -1,0 +1,58 @@
+% backup of the way I used to handle insertions
+% hope it'd be useful in the future when I actually
+% start to consider insertions
+
+% handle insertions
+% we want the insertions as soon as possible
+\floatingpenalty=20000
+% insertions are given global spew-IDs
+%
+% while the parameters related to insertion
+% are evaluated when the end of the group
+% is reached, we spew them here and hope
+% that their values don't get changed
+\let\spewinsert=\insert
+% we redefine \insert this way hoping that the insertion class #1
+% will always be given in a macro, as in
+%
+%   \insert \footins { ... }
+\def\insert#1#2{%
+\stepcounter{spewid}
+\message{^^J%
+[\thespewid] Insertion^^J%
+class-name	#1^^J%
+class-value     \the#1^^J%
+dimen		\the\dimen#1^^J%
+skip		\the\skip#1^^J%
+count		\the\count#1^^J%
+^^J}%
+% place an infobox in main text before the mumbo jumbo of insertion
+\spewidhbox I
+% insert stuff and force them to materialise with the page where they
+% are defined
+%
+% TODO:
+% This is troublesome.
+% #2 is already packed when you have it here.
+% you probably want to open it
+% and add your label inside.
+%
+% TODO:
+% footnotes doesn't use your \everypar.
+% footnotes doesn't use your \par.
+% find some way to sneak them in.
+%{%
+%\toks0={#2}
+%\showthe\toks0
+%}%
+\spewinsert#1{#2}%
+}
+
+% output routines
+\newtoks\spewoutput
+\spewoutput=\output
+\output={%
+%\showbox255       	% write the content to log
+%\spewinsertions		% log insertion boxes
+\the\spewoutput 	% create an ugly document
+}
