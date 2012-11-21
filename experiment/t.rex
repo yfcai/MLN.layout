@@ -1,11 +1,8 @@
+%usepackage[T1]{fontenc}
+
 \input spewhead
 \vbox{
 \input spew
-
-\begin{tabular}{lcr}
-Hi&my&name\\
-is&John&Doe\\
-\end{tabular}
 
 \section{Indeed}
 
