@@ -4,6 +4,8 @@
 \vbox{
 \input spew
 
+\discretionary{Anfang}{Ent\hbox{yo}e}{Ungetrennt}
+
 \section{Indeed}
 
 The number of primitive operations available for token lists is rather

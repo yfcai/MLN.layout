@@ -58,8 +58,24 @@ data PageItem = Hbox BoxDimen [PageItem]
               --Optimisation will be on floats anyway
               --Penalty penalty
               | Penalty Double
-                deriving Show
+              --Discretionary word-breaking point
 -- TODO: discretionary replacing
+              -- | Disc ...
+              -- \discretionary{Anfang}{Ende}{Ungetrennt}
+              --Separating {Angang} and {Ende}
+              | DiscSep
+                deriving Show
+
+--                  level-of-nesting item-declaration
+data PageItemLine = PageItemLine Int String
+                  | DiscSepLine
+                    deriving Show
+
+-- Maps each PageItemLine with a constructor other than PageItemLine
+-- to a specific PageItem. Please keep patterns inexhaustive to detect
+-- bugs.
+unlinePageItem :: PageItemLine -> PageItem
+unlinePageItem DiscSepLine = DiscSep
 
 --                    box-content    to-parse    succeed-or-fail
 type PageItemParser = [PageItem]  -> String   -> Maybe PageItem
@@ -167,36 +183,43 @@ tryPageItemParsers children itemDecl = foldl (!>>) Nothing
 --
 -- and at the same time insert special strings separating
 -- arguments of \discretionary.
--- TODO: implement the above!
--- splitItemLines :: [String] -> [(Int, String)]
+splitItemLines :: [String] -> [PageItemLine]
 splitItemLines lines = let
- --      lvl    toRead    processed-lines                   lvl  decl
- loop :: Int -> String -> [Maybe (Int,  String)] -> [Maybe (Int, String)]
+ --      lvl    toRead    processed-lines
+ loop :: Int -> String -> [PageItemLine] -> [PageItemLine]
  loop n ('.'  : toRead) done = loop (n + 1) toRead done
- loop n ('\\' : toRead) done = Just (n, toRead) : done
- loop n ('|'  : toRead) (Nothing : done) = Nothing : loop (n+1) toRead done
- loop n ('|'  : toRead) done             = Nothing : loop (n+1) toRead done
+ loop n ('\\' : toRead) done = PageItemLine n toRead : done
+ loop n ('|'  : toRead)
+        (DiscSepLine : done) = DiscSepLine : loop (n + 1) toRead done
+ loop n ('|'  : toRead) done = DiscSepLine : loop (n + 1) toRead done
+ -- An error here signals an unexpected line format
  loop n list done = error list
  in
- foldr (loop 0) lines
+ foldr (loop 0) [] lines
 
 -- Transforms a list of item-declarations with levels into a list
 -- of recognised items. Boxes have their children packed inside.
 -- Stuff yet to be parsed are returned.
 --
---  level-of-nesting    item-lines          items       other-item-lines
-parseItemList :: Int -> [(Int, String)] -> ([PageItem], [(Int, String)])
+--  level-of-nesting    item-lines         items       other-item-lines
+parseItemList :: Int -> [PageItemLine] -> ([PageItem], [PageItemLine])
 parseItemList _ [] = ([], [])
-parseItemList nestedLvl allLines@((itemLvl, itemDecl) : otherLines) =
- if itemLvl == nestedLvl
- then let
-  (children , afterChildren  ) = parseItemList (nestedLvl + 1) otherLines
-  (siblings , fromNextLevel  ) = parseItemList nestedLvl fromNextSibling
-  (prependTo, fromNextSibling) = case tryPageItemParsers children itemDecl
-   of Nothing       -> (id          , otherLines   )
-      Just thisItem -> ((thisItem :), afterChildren)
-  in  (prependTo siblings, fromNextLevel)
- else ([]                , allLines     ) -- itemLvl != nestedLvl
+parseItemList nestedLvl allLines@(thisLine : otherLines) = case thisLine of
+ -- Start parsing if the line contains textual information
+ PageItemLine itemLvl itemDecl ->
+  if itemLvl == nestedLvl
+  then let
+   (children , afterChildren  ) = parseItemList (nestedLvl + 1) otherLines
+   (siblings , fromNextLevel  ) = parseItemList nestedLvl fromNextSibling
+   (prependTo, fromNextSibling) = case tryPageItemParsers children itemDecl
+    of Nothing       -> (id          , otherLines   )
+       Just thisItem -> ((thisItem :), afterChildren)
+   in  (prependTo siblings, fromNextLevel)
+  else ([]                , allLines     ) -- itemLvl != nestedLvl
+ -- If the line has no text (e. g. is a separator), then map it directly
+ otherwise -> let
+  (items, unprocessedLines) = parseItemList nestedLvl otherLines
+  in (unlinePageItem thisLine : items, unprocessedLines)
 
 -- TODO: this still has the wrong type. 21.11.12
 extractBoxes :: String -> [PageItem]
@@ -207,16 +230,16 @@ extractBoxes text = let
  in
  case parseItemList 1 itemLines of
   (items, []) -> items
-  (items, ls) -> error (unlines (map show (take 10 ls)))
+  (items, ls) -> error (unlines (map show (take 20 ls)))
  -- Error is triggered when parseItemList fails to eat everything,
  -- due either to a bug or to being invoked on an incorrect level.
 
 
 testBoxes = do
  x <- readFile logFile
- let s = unlines (take 177 (lines x))
+ let s = unlines (take 222 (lines x))
      y = extractBoxes s
- putStrLn (unlines (drop 169 (lines s)))
+ putStrLn (unlines (drop 166 (lines s)))
  putStr (unlines (map show y))
 
 
