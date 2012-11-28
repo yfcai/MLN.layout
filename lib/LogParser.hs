@@ -44,13 +44,23 @@ data Surreal
  | Infinity Int Double
  deriving Show
 
+-- Font identifier made comprehensible
+-- http://www.forkosh.com/pstex/latexcommands.htm
+data FontID = FontID {
+ fontEncoding :: String,
+ fontFamily   :: String,
+ fontSeries   :: String,
+ fontShape    :: String,
+ fontSize     :: Int
+} deriving Show
+
 data PageItem
  -- box dimens   content
  = Hbox BoxDimen [PageItem]
  | Vbox BoxDimen [PageItem]
 
  --         fontID Char   Optional-description
- | FontChar String String String
+ | FontChar FontID String String
 
  --     name   dimension
  | Glue String GlueDimen
@@ -159,11 +169,18 @@ pageItemParserDecls = [
  -- CLOBBERED (corrupted pointer), * (char absent in font)
  PageItemParserDecl "FontChar" 10 (\_ decl ->
   case decl =~*
-   "^([A-Z][A-Z0-9]*/[^ ]+) ([^ ]+)( \\(([^)]+)\\))?"
+   "^([A-Z][A-Z0-9]*)/([^/]+)/([^/]+)/([^/]+)/([0-9]+) \
+   \([^ ]+)( \\(([^)]+)\\))?"
   of
    [] -> Nothing
-   [[_, fontID, char, _, description]] ->
-    Just (FontChar fontID char description)
+   [[_, encoding, family, series, shape, size, char, _, description]] ->
+    Just (FontChar (FontID {
+     fontEncoding = encoding,
+     fontFamily   = family,
+     fontSeries   = series,
+     fontShape    = shape,
+     fontSize     = read size
+    }) char description)
  ),
 
  -- 2: Glue
@@ -306,15 +323,14 @@ extractBoxes text = let
 
 -- TeX wraps lines of log when it becomes longer than a certain number of
 -- chars. We undo it, knowing that the first line of every item starts
--- with either a dot or a backslash.
+-- with either a dot (backslash can be present in wrapped-over lines, too).
+-- This places the burden of making all document items not of top level,
+-- via e. g. placing them in a \vbox.
 joinIntoItems :: [String] -> [String]
 joinIntoItems (x : []) = [x]
 joinIntoItems (x : xs) = let
  nextItem : otherItems = joinIntoItems xs
  joined   = (x ++ nextItem) : otherItems
  splitted = x : nextItem : otherItems
- in if elem (head nextItem) ".\\" then splitted else joined
+ in if (head nextItem) == '.' then splitted else joined
 joinIntoItems [] = []
-
-
-

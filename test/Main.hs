@@ -20,4 +20,4 @@ testBoxes = do
 main = do
  x <- readFile logFile
  let y = extractBoxes x
- print (length y)
+ print y
