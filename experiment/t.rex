@@ -16,6 +16,8 @@ implement other operations such as appending.
 
 \newpage
 
-\subsection{So long and thanks for the fish}
+\subsection{So long and thanks for the fish. Ein guter Mann (der gute
+Mann). Schlag den guten Mann nicht. Schlag einen guten Mann nicht. Gib
+dem guten Mann einen Fisch.}
 
 }

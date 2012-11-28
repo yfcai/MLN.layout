@@ -37,7 +37,7 @@ data GlueDimen = GlueDimen {
  glueNatural :: Double, glueStretch :: Surreal, glueShrink :: Surreal
 } deriving Show
 
--- Simple surreal numbers
+-- Reals and infinities
 data Surreal
  = Real Double
  --       order magnitude
@@ -159,7 +159,7 @@ pageItemParserDecls = [
  -- CLOBBERED (corrupted pointer), * (char absent in font)
  PageItemParserDecl "FontChar" 10 (\_ decl ->
   case decl =~*
-   "^(O?T1/[^ ]+) ([^ ]+)( \\(([^)]+)\\))?"
+   "^([A-Z][A-Z0-9]*/[^ ]+) ([^ ]+)( \\(([^)]+)\\))?"
   of
    [] -> Nothing
    [[_, fontID, char, _, description]] ->
@@ -317,19 +317,4 @@ joinIntoItems (x : xs) = let
 joinIntoItems [] = []
 
 
-
--- Provisional tests
--- =================
-
-logFile = "/Users/yfcai/sc/MLN.layout/experiment/t.log"
-
-testParams = do
- x <- readFile logFile
- let y = extractParams x
- putStr (concatMap show y)
-
-testBoxes = do
- x <- readFile logFile
- let y = extractBoxes x
- print y
 
