@@ -4,7 +4,7 @@
 \vbox{
 \input spew
 
-\discretionary{Anfang}{Ent\hbox{yo}e}{Ungetrennt}
+\discretionary{Anfang}{Ent\hbox{yo}e}{Unge\hbox{(-)}trennt}
 
 \section{Indeed}
 

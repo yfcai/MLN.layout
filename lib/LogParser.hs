@@ -4,8 +4,6 @@ import Text.Regex.TDFA
 import Data.List(sortBy)
 import Data.Maybe(isNothing)
 
-logFile = "/Users/yfcai/sc/MLN.layout/experiment/t.log"
-
 -- ParamHint spewID category [(paramName, paramValue)]
 data ParamHint = ParamHint Int String [(String, String)]
 
@@ -16,6 +14,7 @@ instance Show ParamHint where
   in "[" ++ show sid ++ "] " ++ cat ++ "\n" ++ showPs params
 
 -- Match-all operator for regexes
+infixl 1 =~*
 (=~*) :: String -> String -> [[String]]
 (=~*) = (=~)
 
@@ -28,12 +27,6 @@ extractParams text = let
  formatPs [] = []
  in map format (text =~* paramPars)
 
-testParams = do
- x <- readFile logFile
- let y = extractParams x
- putStr (concatMap show y)
-
-
 
 data BoxDimen = BoxDimen {
  boxHeight :: Double, boxDepth :: Double, boxWidth :: Double,
@@ -41,35 +34,59 @@ data BoxDimen = BoxDimen {
 } deriving Show
 
 data GlueDimen = GlueDimen {
- glueNatural :: Double, glueStretch :: Double, glueShrink :: Double
+ glueNatural :: Double, glueStretch :: Surreal, glueShrink :: Surreal
 } deriving Show
 
-              --xbox dimens   content
-data PageItem = Hbox BoxDimen [PageItem]
-              | Vbox BoxDimen [PageItem]
-              --FontChar fontID char
-              | FontChar String Char
-              --Glue name[optional] dimension
-              | Glue (Maybe String) GlueDimen
-              --We leave abnormal kern types for when math mode got handled
-              --Kern width
-              | Kern Double
-              --Cast penalty to a floating point numer from onset
-              --Optimisation will be on floats anyway
-              --Penalty penalty
-              | Penalty Double
-              --Discretionary word-breaking point
--- TODO: discretionary replacing
-              -- | Disc ...
-              -- \discretionary{Anfang}{Ende}{Ungetrennt}
-              --Separating {Angang} and {Ende}
-              | DiscSep
-                deriving Show
+-- Simple surreal numbers
+data Surreal
+ = Real Double
+ --       order magnitude
+ | Infinity Int Double
+ deriving Show
 
---                  level-of-nesting item-declaration
-data PageItemLine = PageItemLine Int String
-                  | DiscSepLine
-                    deriving Show
+data PageItem
+ -- box dimens   content
+ = Hbox BoxDimen [PageItem]
+ | Vbox BoxDimen [PageItem]
+
+ --         fontID Char   Optional-description
+ | FontChar String String String
+
+ --     name   dimension
+ | Glue String GlueDimen
+
+ -- We leave abnormal kern types for when math mode got handled
+ --     width
+ | Kern Double
+
+ -- Cast penalty to a floating point numer from onset
+ -- Optimisation will be on floats anyway
+ --        penalty
+ | Penalty Double
+
+ -- Discretionary word-breaking point
+ -- \discretionary{Anfang}{Ende}{Ungetrennt}
+ -- Anfang and Ende are children of this node.
+ -- Ungetrennt contains tokens to be replaced should a line break
+ -- happen at this point. They are not children, but succeeding
+ -- siblings of the Disc node. The `replacing` field
+ -- contains the number of succeeding siblings belonging to
+ -- Ungetrennt. The border between Anfang and Ende is marked
+ -- with a DiscSep item. Note that if Ende is empty then no
+ -- DiscSep is introduced, and `replacing` is not mentioned
+ -- if Ungetrennt is empty.
+ | Disc Int [PageItem]
+
+ -- \discretionary{Anfang}{Ende}{Ungetrennt}
+ -- Separating {Angang} and {Ende}
+ | DiscSep
+   deriving Show
+
+data PageItemLine
+ --   nesting-level item-declaration
+ = PageItemLine Int String
+ | DiscSepLine
+   deriving Show
 
 -- Maps each PageItemLine with a constructor other than PageItemLine
 -- to a specific PageItem. Please keep patterns inexhaustive to detect
@@ -87,11 +104,19 @@ data PageItemParserDecl = PageItemParserDecl {
  pageItemParser :: PageItemParser
 }
 
-regFloat  = "[0-9]+\\.[0-9]+"
+-- Regular expressions for positive/negative floats and its capture
+regFloat  = "-?[0-9]+\\.[0-9]+"
 regCFloat = "(" ++ regFloat ++ ")"
 
 readOptional :: (Read a) => a -> String -> a
 readOptional defaultValue s = if null s then defaultValue else read s
+
+-- Converts a float and a filll into a surreal number
+-- `fil`  has order-of-infinity = 1
+-- `fill` has ..                = 2 etc.
+readSurreal :: String -> String -> Surreal
+readSurreal real []  = Real (read real)
+readSurreal inf  fil = Infinity (length fil - 2) (read inf)
 
 -- Define parsers in a list,
 -- so you have no opportunity to forget to use new ones.
@@ -108,12 +133,11 @@ pageItemParserDecls = [
  --
  -- IGNORES 22.11.12
  -- Unset boxes, glue sets, special fields
- PageItemParserDecl "[HV]box" 5 (\boxContent boxDecl -> let
-  boxPars =
+ PageItemParserDecl "[HV]box" 5 (\boxContent boxDecl ->
+  case boxDecl =~*
    "^([hv])box\\(" ++ regCFloat ++ "\\+" ++ regCFloat ++ "\\)x"
    ++ regCFloat ++ "(, glue set[^,]*)?(, shifted " ++ regCFloat ++ ")?"
-  in
-  case boxDecl =~* boxPars of
+  of
    [] -> Nothing
    [[_, hv, height, depth, width, glueSet, shiftStr, shift]] -> let
     cons | hv == "h" = Hbox
@@ -133,15 +157,62 @@ pageItemParserDecls = [
  --
  -- IGNORES 22.11.12
  -- CLOBBERED (corrupted pointer), * (char absent in font)
- --
- -- TODO FIXME: Decl format depends on \discretionary!
-{-
- PageItemParserDecl "FontChar" 10 (\[] decl ->
-  case decl =~* "^(O?T1/[^ ]+) ([^ ]+)( \\( WHAT DO WE PUT HERE?!\\))?" of
+ PageItemParserDecl "FontChar" 10 (\_ decl ->
+  case decl =~*
+   "^(O?T1/[^ ]+) ([^ ]+)( \\(([^)]+)\\))?"
+  of
    [] -> Nothing
-   -- [[_, fontID, 
+   [[_, fontID, char, _, description]] ->
+    Just (FontChar fontID char description)
  ),
--}
+
+ -- 2: Glue
+ PageItemParserDecl "Glue" 8 (\_ decl ->
+  case decl =~*
+   "^glue(\\(([^)]+)\\))? " ++ regCFloat ++
+   "( plus "  ++ regCFloat ++ "(fil+)?)?\
+   \( minus " ++ regCFloat ++ "(fil+)?)?"
+  of
+   [] -> Nothing
+   [[_, _, name, natural, _, plus, pfil, _, minus, mfil]] ->
+    Just (Glue name GlueDimen {
+     glueNatural = read natural,
+     glueStretch = if null plus  then Real 0 else readSurreal plus pfil,
+     glueShrink  = if null minus then Real 0 else readSurreal minus mfil
+    })
+ ),
+
+ -- 3: Kern
+ --
+ -- IGNORES 28.11.12
+ -- \kern -23.45 (for accent)
+ PageItemParserDecl "Kern" 6 (\_ decl ->
+  case decl =~* -- Beware: Space after \kern is optional!
+   "^kern( ?" ++ regFloat ++ ")"
+  of
+   [] -> Nothing
+   [[_, size]] -> Just (Kern (read size))
+ ),
+
+ -- 4: Penalty
+ PageItemParserDecl "Penalty" 4 (\_ decl ->
+  case decl =~*
+   "^penalty (-?[0-9]+)"
+  of
+   [] -> Nothing
+   [[_, penalty]] -> Just (Penalty (read penalty))
+ ),
+
+ -- 5: Disc -- discretionary word-breaking point
+ PageItemParserDecl "Disc" 7 (\children decl ->
+  case decl =~*
+   "^discretionary( replacing ([0-9]+))?"
+  of
+   [] -> Nothing
+   [[_, _, replacing]] -> Just (Disc (readOptional 0 replacing) children)
+ ),
+
+ -- 6: DiscSep -- should be unlined
 
  -- Infinity
  -- Last parser handles I-dunno-what-to-do situations.
@@ -221,7 +292,6 @@ parseItemList nestedLvl allLines@(thisLine : otherLines) = case thisLine of
   (items, unprocessedLines) = parseItemList nestedLvl otherLines
   in (unlinePageItem thisLine : items, unprocessedLines)
 
--- TODO: this still has the wrong type. 21.11.12
 extractBoxes :: String -> [PageItem]
 extractBoxes text = let
  dumpPars  = "Completed box being shipped out.*\n.*\n(.+\n)*"
@@ -233,15 +303,6 @@ extractBoxes text = let
   (items, ls) -> error (unlines (map show (take 20 ls)))
  -- Error is triggered when parseItemList fails to eat everything,
  -- due either to a bug or to being invoked on an incorrect level.
-
-
-testBoxes = do
- x <- readFile logFile
- let s = unlines (take 222 (lines x))
-     y = extractBoxes s
- putStrLn (unlines (drop 166 (lines s)))
- putStr (unlines (map show y))
-
 
 -- TeX wraps lines of log when it becomes longer than a certain number of
 -- chars. We undo it, knowing that the first line of every item starts
@@ -255,4 +316,20 @@ joinIntoItems (x : xs) = let
  in if elem (head nextItem) ".\\" then splitted else joined
 joinIntoItems [] = []
 
+
+
+-- Provisional tests
+-- =================
+
+logFile = "/Users/yfcai/sc/MLN.layout/experiment/t.log"
+
+testParams = do
+ x <- readFile logFile
+ let y = extractParams x
+ putStr (concatMap show y)
+
+testBoxes = do
+ x <- readFile logFile
+ let y = extractBoxes x
+ print y
 
