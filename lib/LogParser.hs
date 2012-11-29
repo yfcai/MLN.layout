@@ -54,6 +54,23 @@ data FontID = FontID {
  fontSize     :: Int
 } deriving Show
 
+-- FontID must be comparable, for key type of fontMap is (String, FontID).
+instance Eq FontID where
+ (==) x y = compare x y == EQ
+
+-- Hard to make Ordering a monad. Must resort to second-best
+-- for lexicographical comparison in a nonstandard component order.
+infixr 1 >>>
+(>>>) :: Ordering -> Ordering -> Ordering
+(>>>) LT _ = LT
+(>>>) GT _ = GT
+(>>>) EQ x = x
+
+instance Ord FontID where
+ compare (FontID xe xf xs xh xi) (FontID ye yf ys yh yi) =
+  compare xi yi >>> compare xf yf >>> compare xs ys >>>
+  compare xh yh >>> compare xe ye
+
 data PageItem
  -- box dimens   content
  = Hbox BoxDimen [PageItem]

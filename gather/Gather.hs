@@ -6,13 +6,19 @@ module Gather where
 
 import LogParser
 import Data.Char(chr)
+import Data.List((\\))
+
+import qualified Data.Map.Strict as Map
+
+-- 1. Emitting code to gather fontChar dimensions
+-- ==============================================
 
 header = "\\showboxbreadth=99999\n\\showboxdepth=99999\n\\makeatletter\n"
 
 -- Create a box wrapping the character denoted by its ASCII code
 -- in a box and show it under the supplied font so as to gather
 -- of the dimensions of the character box.
-charBox :: (FontID, Int) -> String
+charBox :: (FontID, String) -> String
 charBox (f, c) =
  "\\setbox0=\\vbox{\\hbox{\
  \\\fontencoding{" ++ fontEncoding f ++ "}\
@@ -21,7 +27,7 @@ charBox (f, c) =
  \\\fontshape{" ++ fontShape f ++ "}\
  \\\fontsize{" ++ size ++ "}{" ++ size ++ "}\
  \\\selectfont\n"
- ++ printChar c ++
+ ++ c ++
  "}}\\ht0=0pt \\dp0=0pt \\wd0=0pt \\showbox0\n"
  where size = show (fontSize f)
 
@@ -32,22 +38,25 @@ charBox (f, c) =
 -- Please be careful with active characters of TeX.
 printChar :: Int -> String
 printChar n | n <    40 = ['^', '^', chr (n + 64)]
-            | otherwise = case n of
-                    92  -> error "Backslash!"
-                    94  -> "\\textasciicircum"
-                    95  -> "\\textunderscore"
-                    123 -> "\\{"
-                    124 -> "\\}"
-                    126 -> "\\textasciitilde"
-                    127 -> "^^?"
-                    _   -> chr n : []
+            | otherwise = chr n : []
+
+badChars :: [Int] -- things that cause TeX trouble
+badChars = [0..31] ++ [ -- Problematic: unable to type ligatures!
+ 32, 34, 35, 36, 37, 38,
+ 63, 92, 94, 95, 96,
+ 123, 124, 125, 126, 127]
+
 
 encodings = ["OT1"]
 families = ["cmtt", "cmr"]
 series = ["m", "bx"]
 shapes = ["n", "it"]
 sizes = [5, 8, 10, 12]
-asciis = [0..91] ++ [93..127]
+asciis = additionals ++ map printChar ([0..127] \\ badChars)
+
+additionals = [
+ "fi", "ffi"
+ ]
 
 allChars = [(FontID e f s h i, a) |
  e <- encodings,
@@ -58,3 +67,9 @@ allChars = [(FontID e f s h i, a) |
  a <- asciis]
 
 texcode = header ++ concatMap charBox allChars
+
+-- 2. Read the log to understand the dimensions
+-- ============================================
+
+fontMap :: Map (String, FontID) BoxDimen
+fontMap = error "TODO: Implement me!"
